@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "type": "commonjs",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "start": "node src/server.js",
