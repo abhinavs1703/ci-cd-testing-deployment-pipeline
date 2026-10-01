@@ -1,0 +1,13 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - GIT_COMMIT=${GIT_COMMIT:-dev}
+    image: ghcr.io/OWNER/REPO:dev
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GIT_COMMIT=${GIT_COMMIT:-dev}
