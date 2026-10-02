@@ -1,46 +1,39 @@
-# CI/CD Pipeline Demo (GitHub Actions & Docker)
+# CI/CD Pipeline Demo
 
-A Node.js web service packaged with Docker and wired to CI/CD using **GitHub Actions** and **GitHub Container Registry (GHCR)**. The pipeline runs lint + tests on every push/PR, builds/pushes a Docker image on release, and can trigger deployment to a host via a deploy hook (e.g., Render) or a platform's CLI.
+A Node.js web service used to demonstrate a complete CI/CD pipeline with GitHub Actions, Docker, GitHub Container Registry (GHCR), automated testing, deployment, and post-deployment health verification.
 
-## Features
-- Express app with `/` (hello), `/healthz`, and `/version` endpoints
-- Unit/integration tests using Node's built-in test runner (`node:test`) + Supertest
-- ESLint + Prettier + EditorConfig
-- Multi-stage Dockerfile (small production image)
-- `docker-compose.yml` for local dev
-- GitHub Actions:
-  - `ci.yml` – install → lint → test on push/PR
-  - `docker-publish.yml` – build & push image to GHCR on tagged releases
-  - `deploy-render.yml` – POST to a deploy hook URL (e.g., Render) on `main`
+The project is intentionally kept simple so that the complete CI/CD flow can be understood, tested, and explained clearly.
 
-## Tech Stack
-- **Runtime:** Node.js 20
-- **Web:** Express
-- **CI/CD:** GitHub Actions
-- **Container Registry:** GHCR (GitHub Packages)
-- **Container:** Docker (multi-stage build)
+## Project Status
 
-## Quickstart (Local)
-```bash
-npm ci
-npm run dev
+The project is being built in stages.
 
-# Run tests & lint
-npm test
-npm run lint
+Current foundation:
 
-# Run with Docker
-docker compose up --build
-# Open http://localhost:3000/ and http://localhost:3000/healthz
-```
+- Node.js + Express application
+- Automated tests using Node's built-in test runner and Supertest
+- ESLint
+- Multi-stage Dockerfile
+- Docker Compose for local development
+- GitHub Actions test workflow
 
-## Endpoints
-- `GET /` → `{ message: "hello, world" }`
-- `GET /healthz` → `{ status: "ok" }`
-- `GET /version` → `{ version, commit }`
+Target CI/CD flow:
 
-`/version` reads the app version from `package.json` and the Git commit from the `GIT_COMMIT` environment variable (if present).
-
-## Configuration
-- Port is controlled by `PORT` (defaults to `3000`).
-- The `/version` endpoint reads `GIT_COMMIT` (set automatically in Docker and in Actions).
+```text
+Git Push
+    ↓
+GitHub Actions
+    ↓
+Test + Lint
+    ↓
+Docker Build
+    ↓
+Push Image to GHCR
+    ↓
+Deployment Webhook
+    ↓
+Production Server
+    ↓
+Container Restart
+    ↓
+/healthz Verification
