@@ -94,7 +94,7 @@ jobs:
       - name: Trigger Render deployment
         run: |
           IMAGE_TAG="ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
-          ENCODED_IMAGE_TAG=$(python -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["IMAGE_TAG"], safe=""))')
+          ENCODED_IMAGE_TAG=$(IMAGE_TAG="$IMAGE_TAG" python -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["IMAGE_TAG"], safe=""))')
           DEPLOY_URL="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
           SEPARATOR="?"
           if [[ "$DEPLOY_URL" == *"?"* ]]; then SEPARATOR="&"; fi
