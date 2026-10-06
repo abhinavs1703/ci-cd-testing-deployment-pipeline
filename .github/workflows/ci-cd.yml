@@ -93,9 +93,11 @@ jobs:
     steps:
       - name: Trigger Render deployment
         run: |
+          IMAGE_TAG="ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
+          ENCODED_IMAGE_TAG=$(printf '%s' "$IMAGE_TAG" | sed 's/:/%3A/g; s#/#%2F#g')
           curl --fail --show-error --silent \
             -X POST \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}&imgURL=${ENCODED_IMAGE_TAG}"
       - name: Verify production health
         run: |
           curl --fail --show-error --silent \
