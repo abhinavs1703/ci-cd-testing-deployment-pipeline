@@ -93,14 +93,9 @@ jobs:
     steps:
       - name: Trigger Render deployment
         run: |
-          IMAGE_TAG="ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
-          ENCODED_IMAGE_TAG=$(IMAGE_TAG="$IMAGE_TAG" python -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["IMAGE_TAG"], safe=""))')
-          DEPLOY_URL="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-          SEPARATOR="?"
-          if [[ "$DEPLOY_URL" == *"?"* ]]; then SEPARATOR="&"; fi
           curl --fail --show-error --silent \
             -X POST \
-            "${DEPLOY_URL}${SEPARATOR}imgURL=${ENCODED_IMAGE_TAG}"
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
       - name: Verify production health
         run: |
           curl --fail --show-error --silent \
