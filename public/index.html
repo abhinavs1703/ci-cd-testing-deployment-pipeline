@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="CI/CD Pipeline Demo release dashboard">
+  <title>CI/CD Release Control Center</title>
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">CI</div>
+        <div>
+          <div class="eyebrow">DEVOPS PORTFOLIO</div>
+          <h1>Release Control Center</h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="live-pill"><span class="pulse"></span> Production</span>
+        <button id="refreshBtn" class="ghost-btn" type="button">Refresh</button>
+        <a class="primary-btn" href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/actions" target="_blank" rel="noreferrer">Open Actions ↗</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">CI/CD PIPELINE</div>
+          <h2>From commit to production, automatically.</h2>
+          <p>Every push to <strong>main</strong> is tested, containerized, published to GHCR, deployed to Render, and verified with a production health check.</p>
+        </div>
+        <div class="hero-links">
+          <a href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline" target="_blank" rel="noreferrer">Repository ↗</a>
+          <a href="https://ci-cd-testing-deployment-pipeline.onrender.com" target="_blank" rel="noreferrer">Live app ↗</a>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <article class="metric-card">
+          <span class="metric-label">Deployment</span>
+          <strong id="deployStatus">Checking…</strong>
+          <small id="deployDetail">Loading production state</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Application version</span>
+          <strong id="appVersion">—</strong>
+          <small id="commitSha">Commit —</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Latest pipeline</span>
+          <strong id="pipelineStatus">Loading…</strong>
+          <small id="pipelineTime">—</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Runtime</span>
+          <strong>Node.js 24</strong>
+          <small>Docker • Alpine • Render</small>
+        </article>
+      </section>
+
+      <section class="panel pipeline-panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">DELIVERY PIPELINE</div>
+            <h3>Release path</h3>
+          </div>
+          <span id="runBadge" class="status-badge">Loading</span>
+        </div>
+        <div class="pipeline" id="pipeline">
+          <div class="stage" data-stage="test">
+            <div class="stage-icon">01</div>
+            <div class="stage-copy"><strong>Test</strong><span>npm ci · lint · automated tests</span></div>
+            <span class="stage-status">…</span>
+          </div>
+          <div class="connector"></div>
+          <div class="stage" data-stage="build">
+            <div class="stage-icon">02</div>
+            <div class="stage-copy"><strong>Build &amp; Push</strong><span>Docker Buildx · GHCR</span></div>
+            <span class="stage-status">…</span>
+          </div>
+          <div class="connector"></div>
+          <div class="stage" data-stage="deploy">
+            <div class="stage-icon">03</div>
+            <div class="stage-copy"><strong>Deploy</strong><span>Render webhook · production</span></div>
+            <span class="stage-status">…</span>
+          </div>
+          <div class="connector"></div>
+          <div class="stage" data-stage="verify">
+            <div class="stage-icon">04</div>
+            <div class="stage-copy"><strong>Verify</strong><span>/healthz · HTTP 200</span></div>
+            <span class="stage-status">…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid-2">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">PRODUCTION</div>
+              <h3>Live service</h3>
+            </div>
+            <span id="healthBadge" class="status-badge">Checking</span>
+          </div>
+          <div class="service-url">https://ci-cd-testing-deployment-pipeline.onrender.com</div>
+          <div class="endpoint-grid">
+            <a class="endpoint" href="/" target="_blank" rel="noreferrer"><span>GET /</span><b>Application</b><em id="rootState">Check ↗</em></a>
+            <a class="endpoint" href="/healthz" target="_blank" rel="noreferrer"><span>GET /healthz</span><b>Health</b><em id="healthState">Check ↗</em></a>
+            <a class="endpoint" href="/version" target="_blank" rel="noreferrer"><span>GET /version</span><b>Traceability</b><em id="versionState">Check ↗</em></a>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">DELIVERY DETAILS</div>
+              <h3>What gets shipped</h3>
+            </div>
+          </div>
+          <dl class="details">
+            <div><dt>Source</dt><dd>GitHub · main</dd></div>
+            <div><dt>Container</dt><dd>Docker multi-stage</dd></div>
+            <div><dt>Registry</dt><dd>GHCR</dd></div>
+            <div><dt>Deployment</dt><dd>Render</dd></div>
+            <div><dt>Image tag</dt><dd>latest + sha-&lt;commit&gt;</dd></div>
+            <div><dt>Verification</dt><dd>curl /healthz</dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="grid-2">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">LATEST RUN</div>
+              <h3 id="runTitle">Pipeline activity</h3>
+            </div>
+            <a id="runLink" class="text-link" href="#" target="_blank" rel="noreferrer">View run ↗</a>
+          </div>
+          <div id="activity" class="activity">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">ARCHITECTURE</div>
+              <h3>Why this exists</h3>
+            </div>
+          </div>
+          <div class="architecture">
+            <span>Git push</span><i>→</i><span>Actions</span><i>→</i><span>Docker</span><i>→</i><span>GHCR</span><i>→</i><span>Render</span><i>→</i><span>Health</span>
+          </div>
+          <p class="muted">The application is intentionally small. The engineering focus is the automated path that moves tested code into production safely and repeatably.</p>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>CI/CD Pipeline Demo</span>
+      <span id="updatedAt">Last refreshed —</span>
+    </footer>
+  </div>
+  <script src="/dashboard.js"></script>
+</body>
+</html>
