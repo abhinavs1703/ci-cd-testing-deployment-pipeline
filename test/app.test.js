@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const app = require('../src/app');
 
-test('GET / returns hello', async () => {
+test('GET / serves the release dashboard', async () => {
   const res = await request(app).get('/');
   assert.equal(res.status, 200);
-  assert.equal(res.type, 'application/json');
-  assert.deepEqual(res.body, { message: 'hello, world' });
+  assert.match(res.type, /html/);
+  assert.match(res.text, /Release Control Center/);
 });
 
 test('GET /healthz returns ok', async () => {
