@@ -22,8 +22,7 @@ async function refreshDashboard() {
   refresh.textContent = "Refreshing…";
 
   try {
-    const [health, version, pipeline] = await Promise.all([
-      fetch("/healthz", {cache:"no-store"}).then(r => r.ok ? r.json() : Promise.reject(new Error("health"))),
+    const [version, pipeline] = await Promise.all([
       fetch("/version", {cache:"no-store"}).then(r => r.ok ? r.json() : Promise.reject(new Error("version"))),
       fetch("/api/pipeline", {cache:"no-store"}).then(r => r.json())
     ]);
