@@ -87,7 +87,6 @@ function renderPipeline(data) {
   const test = findJob("test application");
   const build = findJob("build and push");
   const deploy = findJob("deploy to production");
-  const verify = deploy;
 
   const stateFor = (job) => {
     if (!job) return ["running","pending"];
