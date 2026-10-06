@@ -1,4 +1,4 @@
-﻿{
+{
   "env": {
     "node": true,
     "es2022": true
@@ -29,6 +29,15 @@
       ],
       "rules": {
         "n/no-unpublished-require": "off"
+      }
+    },
+    {
+      "files": [
+        "public/**/*.js"
+      ],
+      "env": {
+        "browser": true,
+        "es2022": true
       }
     }
   ]
