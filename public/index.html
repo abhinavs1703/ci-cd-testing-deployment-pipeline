@@ -1,128 +1,81 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="CI/CD pipeline operations status">
-  <title>CI/CD Pipeline Status</title>
-  <link rel="stylesheet" href="/dashboard.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="CI/CD pipeline command centre">
+<title>Pipeline Core</title>
+<link rel="stylesheet" href="/dashboard.css">
 </head>
 <body>
-  <div class="shell">
-    <header class="topbar">
-      <nav class="breadcrumb" aria-label="Repository">
-        <a href="https://github.com/abhinavs1703" target="_blank" rel="noreferrer">abhinavs1703</a>
-        <span aria-hidden="true">/</span>
-        <a href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline" target="_blank" rel="noreferrer">ci-cd-testing-deployment-pipeline</a>
-      </nav>
-      <div class="topbar-meta">
-        <span id="environment" class="environment">Local</span>
-        <span id="updated" class="updated">Updated —</span>
-        <button id="refreshButton" class="button" type="button">Refresh</button>
-        <a class="button-link" href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/actions" target="_blank" rel="noreferrer">Actions</a>
-      </div>
-    </header>
+<div class="hud">
+<header class="mast">
+  <div class="brand"><strong>PIPELINE CORE</strong><span>/ abhinavs1703/ci-cd-testing-deployment-pipeline</span></div>
+  <div class="head-data"><span id="env">LOCAL</span><span id="clock">--:--:--</span><span id="uptime">UP 00:00:00</span><button id="refresh" type="button">REFRESH</button><a href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/actions" target="_blank" rel="noreferrer">ACTIONS</a></div>
+</header>
+<div id="banner" class="alert" hidden></div>
+<section class="boot" aria-live="polite"><div id="bootLog"></div><span class="cursor">_</span></section>
 
-    <main>
-      <div id="dataBanner" class="data-banner" role="status" hidden></div>
-
-      <section class="status-strip" aria-label="Current status">
-        <div class="status-cell">
-          <span class="status-label">Service</span>
-          <span id="serviceValue" class="status-value">—</span>
-        </div>
-        <div class="status-cell">
-          <span class="status-label">Version</span>
-          <button id="versionValue" class="copy-value" type="button" title="Copy version and commit">—</button>
-        </div>
-        <div class="status-cell">
-          <span class="status-label">Deployed vs latest main</span>
-          <span id="syncValue" class="status-value">—</span>
-        </div>
-        <div class="status-cell">
-          <span class="status-label">Last run</span>
-          <span id="lastRunValue" class="status-value">—</span>
-        </div>
-        <div class="status-cell">
-          <span class="status-label">Pass rate</span>
-          <span id="passRateValue" class="status-value">—</span>
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="pipelineHeading">
-        <div class="section-heading">
-          <div>
-            <h1 id="pipelineHeading">Pipeline</h1>
-            <div id="latestRunMeta" class="section-meta">—</div>
-          </div>
-          <a id="latestRunLink" class="text-link" href="#" target="_blank" rel="noreferrer" hidden>View run</a>
-        </div>
-        <div id="pipelineGraph" class="pipeline-graph" aria-label="Latest pipeline jobs"></div>
-      </section>
-
-      <section class="section" aria-labelledby="timelineHeading">
-        <div class="section-heading">
-          <div>
-            <h2 id="timelineHeading">Step timeline</h2>
-            <div id="selectedJobMeta" class="section-meta">Select a pipeline job.</div>
-          </div>
-        </div>
-        <div id="stepTimeline" class="step-timeline"></div>
-      </section>
-
-      <section class="section" aria-labelledby="historyHeading">
-        <div class="section-heading history-heading">
-          <div>
-            <h2 id="historyHeading">Run history</h2>
-            <div id="historyMeta" class="section-meta">—</div>
-          </div>
-          <div class="filters" role="group" aria-label="Run history filter">
-            <button class="filter-button active" type="button" data-filter="all" aria-pressed="true">All <span id="allCount">0</span></button>
-            <button class="filter-button" type="button" data-filter="passed" aria-pressed="false">Passed <span id="passedCount">0</span></button>
-            <button class="filter-button" type="button" data-filter="failed" aria-pressed="false">Failed <span id="failedCount">0</span></button>
-          </div>
-        </div>
-        <div class="chart-wrap">
-          <svg id="durationChart" class="duration-chart" viewBox="0 0 900 220" role="img" aria-labelledby="chartTitle chartDesc">
-            <title id="chartTitle">Recent run durations</title>
-            <desc id="chartDesc">Duration bars for recent GitHub Actions runs.</desc>
-          </svg>
-        </div>
-        <div class="table-wrap" tabindex="0">
-          <table>
-            <thead>
-              <tr><th scope="col">Run</th><th class="commit-column" scope="col">Commit</th><th scope="col">Branch</th><th class="actor-column" scope="col">Actor</th><th scope="col">Result</th><th scope="col">Duration</th><th scope="col">Started</th></tr>
-            </thead>
-            <tbody id="historyBody"></tbody>
-          </table>
-        </div>
-        <div id="historyEmpty" class="empty-state" hidden>No completed runs match this filter.</div>
-      </section>
-
-      <section class="section" aria-labelledby="endpointHeading">
-        <div class="section-heading history-heading">
-          <div>
-            <h2 id="endpointHeading">Endpoint checks</h2>
-            <div id="endpointMeta" class="section-meta">No checks run yet.</div>
-          </div>
-          <div class="endpoint-actions">
-            <button id="runChecksButton" class="button" type="button">Run checks</button>
-            <button id="autoCheckButton" class="button" type="button" aria-pressed="false">Auto-check every 10s</button>
-          </div>
-        </div>
-        <div class="table-wrap" tabindex="0">
-          <table>
-            <thead>
-              <tr><th scope="col">Endpoint</th><th scope="col">Method</th><th scope="col">Status</th><th scope="col">Response time</th><th scope="col">Last 20 response times</th><th scope="col">Min / avg / max</th></tr>
-            </thead>
-            <tbody id="endpointBody"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-
-    <footer>Data from GitHub Actions API and this server's endpoints. Refreshed every 60s.</footer>
+<main>
+<section class="core-zone">
+  <div class="panel core-panel" data-id="CORE-00">
+    <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">CORE-00</span>
+    <div class="reticle" aria-hidden="true"><svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="124"/><circle cx="150" cy="150" r="101"/><circle cx="150" cy="150" r="77"/><path d="M150 8v30M150 262v30M8 150h30M262 150h30"/></svg></div>
+    <div class="verdict"><small>PIPELINE VERDICT</small><strong id="verdict">NO DATA</strong><span id="verdictMeta">WAITING FOR LINK</span></div>
+    <div id="runRing" class="run-ring" aria-label="Last 12 pipeline runs"></div>
   </div>
-  <script src="/dashboard.js"></script>
+</section>
+
+<section class="panel test-panel" data-id="TEST-01">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">TEST-01</span>
+<div class="panel-title">TEST VERIFICATION</div>
+<div class="test-grid">
+  <div class="test-state"><div id="testGlyph" class="big-glyph">—</div><div id="testState">NO DATA</div><small id="testTrace">NO TEST JOB DATA</small></div>
+  <div class="test-detail">
+    <div class="trace"><span>RUN</span><a id="testRun" href="#" target="_blank" rel="noreferrer">—</a><span>COMMIT</span><a id="testCommit" href="#" target="_blank" rel="noreferrer">—</a><span>TIME</span><time id="testTime">—</time></div>
+    <div id="testSteps" class="test-steps"></div>
+    <div class="test-history-head"><span>TEST JOB HISTORY</span><strong id="testRate">—</strong></div>
+    <div id="testHistory" class="test-history"></div>
+  </div>
+</div>
+</section>
+
+<section class="panel flow-panel" data-id="FLOW-02">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">FLOW-02</span>
+<div class="panel-title">PIPELINE FLOW</div>
+<div id="flow" class="flow"></div>
+</section>
+
+<section class="panel telemetry-panel" data-id="TEL-03">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">TEL-03</span>
+<div class="panel-title">STEP TELEMETRY <span id="selectedJob">NO JOB SELECTED</span></div>
+<div id="telemetry" class="telemetry"></div>
+</section>
+
+<div class="lower-grid">
+<section class="panel service-panel" data-id="NET-04">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">NET-04</span>
+<div class="panel-title">SERVICE LINK <span id="serviceAge">NO CHECKS</span></div>
+<div class="service-actions"><button id="checks" type="button">RUN CHECKS</button><button id="auto" type="button" aria-pressed="false">AUTO: OFF</button></div>
+<div id="services" class="services"></div>
+</section>
+
+<section class="panel sync-panel" data-id="SYNC-05">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">SYNC-05</span>
+<div class="panel-title">DEPLOY SYNC</div>
+<div class="sync-readout"><strong id="sync">UNKNOWN</strong><span id="syncGlyph">—</span></div>
+<div class="sync-lines"><div><span>RUNNING VERSION</span><b id="version">—</b></div><div><span>RUNNING COMMIT</span><b id="liveCommit">—</b></div><div><span>LATEST MAIN</span><b id="mainCommit">—</b></div><div><span>RUN</span><b id="mainRun">—</b></div></div>
+</section>
+</div>
+
+<section class="panel log-panel" data-id="LOG-06">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><span class="tag">LOG-06</span>
+<div class="panel-title">RUN LOG <span id="logMeta">—</span><div class="filters"><button class="active" data-filter="all" type="button">ALL <i id="countAll">0</i></button><button data-filter="passed" type="button">PASSED <i id="countPassed">0</i></button><button data-filter="failed" type="button">FAILED <i id="countFailed">0</i></button></div></div>
+<div id="runLog" class="run-log"></div>
+</section>
+</main>
+<footer>GITHUB ACTIONS API · SERVER ENDPOINTS · LAST REFRESH <span id="footerRefresh">—</span> · NEXT LINK <span id="nextRefresh">60s</span></footer>
+</div>
+<script src="/dashboard.js"></script>
 </body>
 </html>
