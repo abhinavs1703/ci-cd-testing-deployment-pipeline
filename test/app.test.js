@@ -51,7 +51,7 @@ test('GET /version returns version and commit', async () => {
   assert.ok(res.body.commit);
 });
 
-test('GET /api/pipeline returns runs, jobs and error shape', async () => {
+test('GET /api/pipeline returns runs, jobs and error shape', { concurrency: false }, async () => {
   const originalFetch = global.fetch;
   app.resetPipelineCache();
 
@@ -97,7 +97,7 @@ test('GET /api/pipeline returns runs, jobs and error shape', async () => {
   }
 });
 
-test('GET /api/pipeline returns cached data and an error when GitHub is unreachable', async () => {
+test('GET /api/pipeline returns cached data and an error when GitHub is unreachable', { concurrency: false }, async () => {
   const originalFetch = global.fetch;
   const originalNow = Date.now;
   app.resetPipelineCache();
