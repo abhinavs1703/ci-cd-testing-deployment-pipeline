@@ -10,7 +10,7 @@ const CACHE_TTL_MS = 60 * 1000;
 
 let pipelineCache = {
   timestamp: 0,
-  data: { runs: [], jobs: [], comparison: null, error: null },
+  data: { runs: [], jobs: [], test_history: [], comparison: null, error: null },
 };
 
 function githubHeaders() {
@@ -78,6 +78,17 @@ async function fetchGitHubJson(url) {
   return response.json();
 }
 
+async function fetchRunJobs(run) {
+  const jobsData = await fetchGitHubJson(
+    `${GITHUB_API}/repos/${REPOSITORY}/actions/runs/${run.id}/jobs?per_page=50`
+  );
+  return (jobsData.jobs || []).map(normalizeJob);
+}
+
+function testJobFor(jobs) {
+  return jobs.find((job) => job.name === 'Test application') || null;
+}
+
 async function loadPipelineData() {
   const now = Date.now();
   if (pipelineCache.timestamp > 0 && now - pipelineCache.timestamp < CACHE_TTL_MS) {
@@ -90,18 +101,50 @@ async function loadPipelineData() {
     );
     const runs = (runsData.workflow_runs || []).map(normalizeRun);
     let jobs = [];
+    let testHistory = [];
     let comparison = null;
     let error = null;
 
     if (runs[0]) {
       try {
-        const jobsData = await fetchGitHubJson(
-          `${GITHUB_API}/repos/${REPOSITORY}/actions/runs/${runs[0].id}/jobs?per_page=50`
-        );
-        jobs = (jobsData.jobs || []).map(normalizeJob);
+        jobs = await fetchRunJobs(runs[0]);
       } catch (jobsError) {
         error = jobsError.message;
       }
+    }
+
+    try {
+      const historyResults = await Promise.all(
+        runs.map(async (run) => {
+          try {
+            const runJobs = await fetchRunJobs(run);
+            const testJob = testJobFor(runJobs);
+            return {
+              run_id: run.id,
+              run_number: run.number,
+              conclusion: testJob?.conclusion || null,
+              status: testJob?.status || null,
+              started_at: testJob?.started_at || null,
+              completed_at: testJob?.completed_at || null,
+            };
+          } catch (_error) {
+            return {
+              run_id: run.id,
+              run_number: run.number,
+              conclusion: null,
+              status: null,
+              started_at: null,
+              completed_at: null,
+            };
+          }
+        })
+      );
+      testHistory = historyResults;
+      if (historyResults.some((item) => item.conclusion === null)) {
+        error = error || 'Some GitHub test-job history is unavailable.';
+      }
+    } catch (historyError) {
+      error = error || historyError.message;
     }
 
     const deployedCommit = process.env.GIT_COMMIT;
@@ -115,7 +158,7 @@ async function loadPipelineData() {
       }
     }
 
-    const data = { runs, jobs, comparison, error };
+    const data = { runs, jobs, test_history: testHistory, comparison, error };
     pipelineCache = { timestamp: now, data };
     return data;
   } catch (error) {
@@ -124,6 +167,7 @@ async function loadPipelineData() {
     return {
       runs: cached.runs,
       jobs: cached.jobs,
+      test_history: cached.test_history,
       comparison: cached.comparison,
       error: message,
     };
@@ -156,6 +200,6 @@ module.exports = app;
 module.exports.resetPipelineCache = () => {
   pipelineCache = {
     timestamp: 0,
-    data: { runs: [], jobs: [], comparison: null, error: null },
+    data: { runs: [], jobs: [], test_history: [], comparison: null, error: null },
   };
 };
