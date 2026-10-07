@@ -16,7 +16,8 @@ let pipelineCache = {
 function githubHeaders() {
   const headers = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'ci-cd-pipeline-status-dashboard',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'ci-cd-pipeline-dashboard',
   };
 
   if (process.env.GITHUB_TOKEN) {
@@ -70,9 +71,15 @@ async function fetchGitHubJson(url) {
   const response = await fetch(url, { headers: githubHeaders() });
 
   if (!response.ok) {
-    const rateLimit = response.status === 403 || response.status === 429;
-    const suffix = rateLimit ? ' GitHub may have rate-limited the request.' : '';
-    throw new Error(`GitHub API returned HTTP ${response.status}.${suffix}`);
+    const rateLimited = response.status === 403 || response.status === 429;
+    const remaining = response.headers.get('x-ratelimit-remaining');
+    if (rateLimited) {
+      const authHint = process.env.GITHUB_TOKEN
+        ? ''
+        : ' Set GITHUB_TOKEN for an authenticated GitHub API connection.';
+      throw new Error(`GitHub API returned HTTP ${response.status}.${remaining === '0' ? ' API rate limit is exhausted.' : ''}${authHint}`);
+    }
+    throw new Error(`GitHub API returned HTTP ${response.status}.`);
   }
 
   return response.json();
@@ -89,6 +96,17 @@ function testJobFor(jobs) {
   return jobs.find((job) => job.name === 'Test application') || null;
 }
 
+function historyFromRuns(runs) {
+  return runs.map((run) => ({
+    run_id: run.id,
+    run_number: run.number,
+    conclusion: run.conclusion,
+    status: run.status,
+    started_at: run.run_started_at || run.created_at,
+    completed_at: run.updated_at,
+  }));
+}
+
 async function loadPipelineData() {
   const now = Date.now();
   if (pipelineCache.timestamp > 0 && now - pipelineCache.timestamp < CACHE_TTL_MS) {
@@ -101,54 +119,27 @@ async function loadPipelineData() {
     );
     const runs = (runsData.workflow_runs || []).map(normalizeRun);
     let jobs = [];
-    let testHistory = [];
+    let testHistory = historyFromRuns(runs);
     let comparison = null;
     let error = null;
 
     if (runs[0]) {
       try {
         jobs = await fetchRunJobs(runs[0]);
+        const testJob = testJobFor(jobs);
+        if (!testJob) error = 'Latest run does not contain the Test application job.';
       } catch (jobsError) {
         error = jobsError.message;
       }
     }
 
-    try {
-      const historyResults = await Promise.all(
-        runs.map(async (run) => {
-          try {
-            const runJobs = await fetchRunJobs(run);
-            const testJob = testJobFor(runJobs);
-            return {
-              run_id: run.id,
-              run_number: run.number,
-              conclusion: testJob?.conclusion || null,
-              status: testJob?.status || null,
-              started_at: testJob?.started_at || null,
-              completed_at: testJob?.completed_at || null,
-            };
-          } catch (_error) {
-            return {
-              run_id: run.id,
-              run_number: run.number,
-              conclusion: null,
-              status: null,
-              started_at: null,
-              completed_at: null,
-            };
-          }
-        })
-      );
-      testHistory = historyResults;
-      if (historyResults.some((item) => item.conclusion === null)) {
-        error = error || 'Some GitHub test-job history is unavailable.';
-      }
-    } catch (historyError) {
-      error = error || historyError.message;
-    }
-
     const deployedCommit = process.env.GIT_COMMIT;
-    if (deployedCommit && deployedCommit !== 'dev' && deployedCommit !== 'dev-build' && runs[0]?.head_sha && deployedCommit !== runs[0].head_sha) {
+    if (
+      deployedCommit &&
+      !['dev', 'dev-build'].includes(deployedCommit) &&
+      runs[0]?.head_sha &&
+      deployedCommit !== runs[0].head_sha
+    ) {
       try {
         comparison = await fetchGitHubJson(
           `${GITHUB_API}/repos/${REPOSITORY}/compare/${deployedCommit}...${runs[0].head_sha}`
