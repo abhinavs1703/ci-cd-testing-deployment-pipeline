@@ -10,7 +10,7 @@ const CACHE_TTL_MS = 60 * 1000;
 
 let pipelineCache = {
   timestamp: 0,
-  data: { runs: [], jobs: [], error: null },
+  data: { runs: [], jobs: [], comparison: null, error: null },
 };
 
 function githubHeaders() {
@@ -36,10 +36,12 @@ function normalizeRun(run) {
     conclusion: run.conclusion,
     head_sha: run.head_sha,
     head_branch: run.head_branch,
+    actor: run.actor?.login || null,
     created_at: run.created_at,
     updated_at: run.updated_at,
     run_started_at: run.run_started_at,
     html_url: run.html_url,
+    commit_url: run.head_sha ? `https://github.com/${REPOSITORY}/commit/${run.head_sha}` : null,
     display_title: run.display_title || run.name || 'CI/CD Pipeline',
   };
 }
@@ -88,6 +90,7 @@ async function loadPipelineData() {
     );
     const runs = (runsData.workflow_runs || []).map(normalizeRun);
     let jobs = [];
+    let comparison = null;
     let error = null;
 
     if (runs[0]) {
@@ -101,7 +104,18 @@ async function loadPipelineData() {
       }
     }
 
-    const data = { runs, jobs, error };
+    const deployedCommit = process.env.GIT_COMMIT;
+    if (deployedCommit && deployedCommit !== 'dev' && deployedCommit !== 'dev-build' && runs[0]?.head_sha && deployedCommit !== runs[0].head_sha) {
+      try {
+        comparison = await fetchGitHubJson(
+          `${GITHUB_API}/repos/${REPOSITORY}/compare/${deployedCommit}...${runs[0].head_sha}`
+        );
+      } catch (comparisonError) {
+        error = error ? `${error} ${comparisonError.message}` : comparisonError.message;
+      }
+    }
+
+    const data = { runs, jobs, comparison, error };
     pipelineCache = { timestamp: now, data };
     return data;
   } catch (error) {
@@ -110,6 +124,7 @@ async function loadPipelineData() {
     return {
       runs: cached.runs,
       jobs: cached.jobs,
+      comparison: cached.comparison,
       error: message,
     };
   }
@@ -141,6 +156,6 @@ module.exports = app;
 module.exports.resetPipelineCache = () => {
   pipelineCache = {
     timestamp: 0,
-    data: { runs: [], jobs: [], error: null },
+    data: { runs: [], jobs: [], comparison: null, error: null },
   };
 };
