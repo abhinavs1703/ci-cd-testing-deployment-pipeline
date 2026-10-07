@@ -4,6 +4,117 @@ const pkg = require('../package.json');
 
 const app = express();
 
+const GITHUB_API = 'https://api.github.com';
+const REPOSITORY = 'abhinavs1703/ci-cd-testing-deployment-pipeline';
+const CACHE_TTL_MS = 60 * 1000;
+
+let pipelineCache = {
+  timestamp: 0,
+  data: { runs: [], jobs: [], error: null },
+};
+
+function githubHeaders() {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ci-cd-pipeline-status-dashboard',
+  };
+
+  if (process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+
+  return headers;
+}
+
+function normalizeRun(run) {
+  return {
+    id: run.id,
+    number: run.run_number,
+    name: run.name || 'CI/CD Pipeline',
+    event: run.event,
+    status: run.status,
+    conclusion: run.conclusion,
+    head_sha: run.head_sha,
+    head_branch: run.head_branch,
+    created_at: run.created_at,
+    updated_at: run.updated_at,
+    run_started_at: run.run_started_at,
+    html_url: run.html_url,
+    display_title: run.display_title || run.name || 'CI/CD Pipeline',
+  };
+}
+
+function normalizeJob(job) {
+  return {
+    id: job.id,
+    name: job.name,
+    status: job.status,
+    conclusion: job.conclusion,
+    started_at: job.started_at,
+    completed_at: job.completed_at,
+    html_url: job.html_url,
+    steps: (job.steps || []).map((step) => ({
+      name: step.name,
+      status: step.status,
+      conclusion: step.conclusion,
+      number: step.number,
+      started_at: step.started_at,
+      completed_at: step.completed_at,
+    })),
+  };
+}
+
+async function fetchGitHubJson(url) {
+  const response = await fetch(url, { headers: githubHeaders() });
+
+  if (!response.ok) {
+    const rateLimit = response.status === 403 || response.status === 429;
+    const suffix = rateLimit ? ' GitHub may have rate-limited the request.' : '';
+    throw new Error(`GitHub API returned HTTP ${response.status}.${suffix}`);
+  }
+
+  return response.json();
+}
+
+async function loadPipelineData() {
+  const now = Date.now();
+  if (now - pipelineCache.timestamp < CACHE_TTL_MS) {
+    return pipelineCache.data;
+  }
+
+  try {
+    const runsData = await fetchGitHubJson(
+      `${GITHUB_API}/repos/${REPOSITORY}/actions/runs?event=push&branch=main&per_page=12`
+    );
+    const runs = (runsData.workflow_runs || []).map(normalizeRun);
+    let jobs = [];
+    let error = null;
+
+    if (runs[0]) {
+      try {
+        const jobsData = await fetchGitHubJson(
+          `${GITHUB_API}/repos/${REPOSITORY}/actions/runs/${runs[0].id}/jobs?per_page=50`
+        );
+        jobs = (jobsData.jobs || []).map(normalizeJob);
+      } catch (jobsError) {
+        error = jobsError.message;
+      }
+    }
+
+    const data = { runs, jobs, error };
+    pipelineCache = { timestamp: now, data };
+    return data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load GitHub Actions data.';
+    const cached = pipelineCache.data;
+    return {
+      runs: cached.runs,
+      jobs: cached.jobs,
+      error: message,
+    };
+  }
+}
+
 app.get('/healthz', (_req, res) => {
   res.json({ status: 'ok' });
 });
@@ -16,33 +127,8 @@ app.get('/version', (_req, res) => {
 });
 
 app.get('/api/pipeline', async (_req, res) => {
-  try {
-    const response = await fetch(
-      'https://api.github.com/repos/abhinavs1703/ci-cd-testing-deployment-pipeline/actions/runs?per_page=1',
-      { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'ci-cd-pipeline-dashboard' } }
-    );
-
-    if (!response.ok) {
-      return res.status(200).json({ run: null, jobs: [] });
-    }
-
-    const data = await response.json();
-    const run = data.workflow_runs?.[0] || null;
-
-    if (!run) {
-      return res.json({ run: null, jobs: [] });
-    }
-
-    const jobsResponse = await fetch(
-      `https://api.github.com/repos/abhinavs1703/ci-cd-testing-deployment-pipeline/actions/runs/${run.id}/jobs?per_page=20`,
-      { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'ci-cd-pipeline-dashboard' } }
-    );
-
-    const jobsData = jobsResponse.ok ? await jobsResponse.json() : { jobs: [] };
-    res.json({ run, jobs: jobsData.jobs || [] });
-  } catch (_error) {
-    res.status(200).json({ run: null, jobs: [] });
-  }
+  const data = await loadPipelineData();
+  res.status(200).json(data);
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
@@ -52,3 +138,9 @@ app.get('/', (_req, res) => {
 });
 
 module.exports = app;
+module.exports.resetPipelineCache = () => {
+  pipelineCache = {
+    timestamp: 0,
+    data: { runs: [], jobs: [], error: null },
+  };
+};
