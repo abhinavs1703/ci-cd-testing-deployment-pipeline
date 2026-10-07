@@ -93,13 +93,15 @@ test('GET /api/pipeline returns runs, jobs, comparison and error shape', { concu
   try {
     const res = await request(app).get('/api/pipeline');
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(res.body).sort(), ['comparison', 'error', 'jobs', 'runs']);
+    assert.deepEqual(Object.keys(res.body).sort(), ['comparison', 'error', 'jobs', 'runs', 'test_history']);
     assert.equal(res.body.error, null);
     assert.equal(res.body.runs.length, 1);
     assert.equal(res.body.runs[0].actor, 'abhinavs1703');
     assert.match(res.body.runs[0].commit_url, /\/commit\/abcdef/);
     assert.equal(res.body.jobs.length, 1);
     assert.equal(res.body.jobs[0].steps.length, 1);
+    assert.equal(res.body.test_history.length, 1);
+    assert.equal(res.body.test_history[0].conclusion, 'success');
     assert.equal(res.body.comparison.behind_by, 2);
   } finally {
     global.fetch = originalFetch;
