@@ -3,78 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="CI/CD pipeline command centre">
-<title>Pipeline Core</title>
+<meta name="description" content="CI/CD pipeline operations dashboard">
+<title>Pipeline Core — CI/CD Operations</title>
 <link rel="stylesheet" href="/dashboard.css">
 </head>
 <body>
-<div class="hud">
-<header class="mast">
-  <div class="brand"><strong>PIPELINE CORE</strong><span>/ abhinavs1703/ci-cd-testing-deployment-pipeline</span></div>
-  <div class="head-data"><span id="env">LOCAL</span><span id="clock">--:--:--</span><span id="uptime">UP 00:00:00</span><button id="refresh" type="button">REFRESH</button><a href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/actions" target="_blank" rel="noreferrer">ACTIONS</a></div>
+<div class="app-shell">
+<header class="topbar">
+  <div class="brand-block">
+    <div class="eyebrow">CI/CD OPERATIONS</div>
+    <div class="brand-row"><strong>PIPELINE CORE</strong><span class="repo">abhinavs1703 / ci-cd-testing-deployment-pipeline</span></div>
+  </div>
+  <div class="top-actions">
+    <span class="env-pill" id="env">LOCAL</span>
+    <span id="clock">--:--:--</span>
+    <span id="uptime">UP 00:00:00</span>
+    <button id="refresh" class="btn btn-primary" type="button">Refresh</button>
+    <a class="btn" href="https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/actions" target="_blank" rel="noreferrer">GitHub Actions ↗</a>
+  </div>
 </header>
+
 <div id="banner" class="alert" hidden></div>
-<section class="boot" aria-live="polite"><div id="bootLog"></div><span class="cursor">_</span></section>
+
+<section class="bootbar" aria-live="polite">
+  <div><span class="live-dot"></span><span id="bootLog"></span><span class="cursor">▋</span></div>
+  <div class="refresh-state">AUTO REFRESH <strong id="nextRefresh">60s</strong></div>
+</section>
 
 <main>
-<section class="core-zone">
-  <div class="panel core-panel" data-id="CORE-00">
-    <svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">CORE-00</span>
-    <div class="reticle" aria-hidden="true"><svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="124"/><circle cx="150" cy="150" r="101"/><circle cx="150" cy="150" r="77"/><path d="M150 8v30M150 262v30M8 150h30M262 150h30"/></svg></div>
-    <div class="verdict"><small>PIPELINE VERDICT</small><strong id="verdict">NO DATA</strong><span id="verdictMeta">WAITING FOR LINK</span></div>
-    <div id="runRing" class="run-ring" aria-label="Last 12 pipeline runs"></div>
-  </div>
-</section>
+  <section class="hero-grid">
+    <div class="panel overview-card">
+      <div class="panel-head">
+        <div><span class="panel-kicker">SYSTEM STATUS</span><h1>Pipeline health</h1></div>
+        <span class="status-chip" id="heroChip">WAITING</span>
+      </div>
+      <div class="hero-content">
+        <div class="health-score">
+          <div class="score-ring"><div><small>VERDICT</small><strong id="verdict">NO DATA</strong><span id="verdictMeta">WAITING FOR TELEMETRY</span></div></div>
+        </div>
+        <div class="health-summary">
+          <div class="summary-grid">
+            <div><span>Latest run</span><strong id="heroRun">—</strong></div>
+            <div><span>Test pass rate</span><strong id="heroPassRate">—</strong></div>
+            <div><span>Service</span><strong id="heroService">—</strong></div>
+            <div><span>Version</span><strong id="heroVersion">—</strong></div>
+          </div>
+          <div class="run-history"><div class="mini-title">LAST 12 PIPELINE RUNS</div><div id="runRing" class="run-segment-row"></div></div>
+        </div>
+      </div>
+    </div>
 
-<section class="panel test-panel" data-id="TEST-01">
-<svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">TEST-01</span>
-<div class="panel-title">TEST VERIFICATION</div>
-<div class="test-grid">
-  <div class="test-state"><div id="testGlyph" class="big-glyph">—</div><div id="testState">NO DATA</div><small id="testTrace">NO TEST JOB DATA</small></div>
-  <div class="test-detail">
-    <div class="trace"><span>RUN</span><a id="testRun" href="#" target="_blank" rel="noreferrer">—</a><span>COMMIT</span><a id="testCommit" href="#" target="_blank" rel="noreferrer">—</a><span>TIME</span><time id="testTime">—</time></div>
-    <div id="testSteps" class="test-steps"></div>
-    <div class="test-history-head"><span>TEST JOB HISTORY</span><strong id="testRate">—</strong></div>
-    <div id="testHistory" class="test-history"></div>
-  </div>
-</div>
-</section>
+    <div class="panel release-card">
+      <div class="panel-head"><div><span class="panel-kicker">RELEASE SIGNAL</span><h2>Deploy sync</h2></div><span id="sync" class="status-chip">UNKNOWN</span></div>
+      <div class="release-main"><div id="syncGlyph" class="release-icon">—</div><div><strong id="version">—</strong><span id="liveCommit">No deployment commit</span></div></div>
+      <div class="release-lines">
+        <div><span>Latest main</span><b id="mainCommit">—</b></div>
+        <div><span>Pipeline run</span><b id="mainRun">—</b></div>
+      </div>
+    </div>
+  </section>
 
-<section class="panel flow-panel" data-id="FLOW-02">
-<svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">FLOW-02</span>
-<div class="panel-title">PIPELINE FLOW</div>
-<div id="flow" class="flow"></div>
-</section>
+  <section class="panel test-panel">
+    <div class="panel-head">
+      <div><span class="panel-kicker">VERIFICATION</span><h2>Test verification</h2></div>
+      <div class="metric"><strong id="testRate">—</strong><span>12-run history</span></div>
+    </div>
+    <div class="test-layout">
+      <div class="test-status">
+        <div id="testGlyph" class="test-icon">—</div>
+        <strong id="testState">NO DATA</strong>
+        <span id="testTrace">WAITING FOR GITHUB ACTIONS</span>
+      </div>
+      <div class="test-detail">
+        <div class="trace-grid">
+          <div><span>RUN</span><a id="testRun" href="#" target="_blank" rel="noreferrer">—</a></div>
+          <div><span>COMMIT</span><a id="testCommit" href="#" target="_blank" rel="noreferrer">—</a></div>
+          <div><span>STARTED</span><time id="testTime">—</time></div>
+        </div>
+        <div id="testSteps" class="test-steps"></div>
+        <div class="history"><div class="mini-title">TEST JOB HISTORY</div><div id="testHistory" class="test-history"></div></div>
+      </div>
+    </div>
+  </section>
 
-<section class="panel telemetry-panel" data-id="TEL-03">
-<svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">TEL-03</span>
-<div class="panel-title">STEP TELEMETRY <span id="selectedJob">NO JOB SELECTED</span></div>
-<div id="telemetry" class="telemetry"></div>
-</section>
+  <section class="panel flow-panel">
+    <div class="panel-head"><div><span class="panel-kicker">DELIVERY</span><h2>Pipeline flow</h2></div><span class="muted">REAL GITHUB JOBS</span></div>
+    <div id="flow" class="flow"></div>
+  </section>
 
-<div class="lower-grid">
-<section class="panel service-panel" data-id="NET-04">
-<svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">NET-04</span>
-<div class="panel-title">SERVICE LINK <span id="serviceAge">NO CHECKS</span></div>
-<div class="service-actions"><button id="checks" type="button">RUN CHECKS</button><button id="auto" type="button" aria-pressed="false">AUTO: OFF</button></div>
-<div id="services" class="services"></div>
-</section>
+  <section class="panel telemetry-panel">
+    <div class="panel-head"><div><span class="panel-kicker">EXECUTION</span><h2>Step telemetry</h2></div><span id="selectedJob" class="muted">NO JOB SELECTED</span></div>
+    <div id="telemetry" class="telemetry"></div>
+  </section>
 
-<section class="panel sync-panel" data-id="SYNC-05">
-<svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">SYNC-05</span>
-<div class="panel-title">DEPLOY SYNC</div>
-<div class="sync-readout"><strong id="sync">UNKNOWN</strong><span id="syncGlyph">—</span></div>
-<div class="sync-lines"><div><span>RUNNING VERSION</span><b id="version">—</b></div><div><span>RUNNING COMMIT</span><b id="liveCommit">—</b></div><div><span>LATEST MAIN</span><b id="mainCommit">—</b></div><div><span>RUN</span><b id="mainRun">—</b></div></div>
-</section>
-</div>
+  <section class="panel service-panel">
+    <div class="panel-head"><div><span class="panel-kicker">LIVE SERVICE</span><h2>Service link</h2></div><span id="serviceAge" class="muted">NO CHECKS</span></div>
+    <div class="service-actions"><button id="checks" class="btn btn-primary" type="button">Run checks</button><button id="auto" class="btn" type="button" aria-pressed="false">Auto: off</button></div>
+    <div id="services" class="services"></div>
+  </section>
 
-<section class="panel log-panel" data-id="LOG-06">
-<svg class="corner-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M2 14V2h12M86 2h12v12M98 86v12H86M14 98H2V86"/></svg><span class="tag">LOG-06</span>
-<div class="panel-title">RUN LOG <span id="logMeta">—</span><div class="filters"><button class="active" data-filter="all" type="button">ALL <i id="countAll">0</i></button><button data-filter="passed" type="button">PASSED <i id="countPassed">0</i></button><button data-filter="failed" type="button">FAILED <i id="countFailed">0</i></button></div></div>
-<div id="runLog" class="run-log"></div>
-</section>
+  <section class="panel log-panel">
+    <div class="panel-head">
+      <div><span class="panel-kicker">AUDIT TRAIL</span><h2>Run log</h2></div>
+      <div class="filters"><button class="active" data-filter="all" type="button">All <i id="countAll">0</i></button><button data-filter="passed" type="button">Passed <i id="countPassed">0</i></button><button data-filter="failed" type="button">Failed <i id="countFailed">0</i></button></div>
+    </div>
+    <div id="runLog" class="run-log"></div>
+  </section>
 </main>
-<footer>GITHUB ACTIONS API · SERVER ENDPOINTS · LAST REFRESH <span id="footerRefresh">—</span> · NEXT LINK <span id="nextRefresh">60s</span></footer>
+
+<footer><span>GITHUB ACTIONS API</span><span>SERVER HEALTH ENDPOINTS</span><span>LAST REFRESH <b id="footerRefresh">—</b></span></footer>
 </div>
 <script src="/dashboard.js"></script>
 </body>
