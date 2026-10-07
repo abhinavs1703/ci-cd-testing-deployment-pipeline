@@ -36,7 +36,7 @@ test('GET / serves the operations dashboard', async () => {
   const res = await request(app).get('/');
   assert.equal(res.status, 200);
   assert.match(res.type, /html/);
-  assert.match(res.text, /CI\/CD Pipeline Status/);
+  assert.match(res.text, /Pipeline Core/);
   assert.match(res.text, /TEST VERIFICATION/);
   assert.match(res.text, /SERVICE LINK/);
   assert.doesNotMatch(res.text, /From commit to production, automatically/);
