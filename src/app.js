@@ -78,7 +78,7 @@ async function fetchGitHubJson(url) {
 
 async function loadPipelineData() {
   const now = Date.now();
-  if (now - pipelineCache.timestamp < CACHE_TTL_MS) {
+  if (pipelineCache.timestamp > 0 && now - pipelineCache.timestamp < CACHE_TTL_MS) {
     return pipelineCache.data;
   }
 
