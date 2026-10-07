@@ -81,18 +81,8 @@ async function checkEndpoint(endpoint) {
   }
 }
 
-function loadEndpointHistory(path) {
-  try {
-    const saved = localStorage.getItem(`pipeline-endpoint-history:${path}`);
-    return saved ? JSON.parse(saved) : [];
-  } catch (_error) {
-    return [];
-  }
-}
-
 function saveEndpointResult(result) {
-  const history = [result, ...loadEndpointHistory(result.path)].slice(0, 10);
-  try { localStorage.setItem(`pipeline-endpoint-history:${result.path}`, JSON.stringify(history)); } catch (_error) {}
+  const history = [result, ...(state.endpointResults[result.path] || [])].slice(0, 10);
   state.endpointResults[result.path] = history;
 }
 
@@ -312,7 +302,7 @@ $$(".filter-button").forEach((button)=>button.addEventListener("click",()=>{
   renderHistory();
 }));
 $("#runChecksButton").addEventListener("click",runEndpointChecks);
-ENDPOINTS.forEach((endpoint)=>{ state.endpointResults[endpoint.path]=loadEndpointHistory(endpoint.path); });
+ENDPOINTS.forEach((endpoint)=>{ state.endpointResults[endpoint.path]=[]; });
 renderEndpointChecks();
 refreshDashboard();
 setInterval(refreshDashboard,60000);
