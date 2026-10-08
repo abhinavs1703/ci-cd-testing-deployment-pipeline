@@ -1,94 +1,67 @@
 # CI/CD Pipeline Demo
 
-A small Node.js web service demonstrating a complete CI/CD pipeline with GitHub Actions, Docker, GitHub Container Registry (GHCR), and Render.
+A small Node.js and Express service demonstrating CI/CD with GitHub Actions, Docker, GHCR, and Render.
 
-The pipeline automatically:
+## Status dashboard
 
-1. Installs dependencies
-2. Runs ESLint
-3. Runs automated tests
-4. Builds a production Docker image
-5. Pushes the image to GHCR
-6. Triggers a Render deployment
-7. Verifies the production `/healthz` endpoint
+The root page is a compact operations dashboard. It reads `/healthz` and `/version` directly from the served application, measures endpoint latency, shows the deployed version and commit, compares the deployed commit with the newest push run on `main`, and displays the latest GitHub Actions jobs and step timings.
 
-The project is intentionally simple so the entire flow can be understood and explained clearly in a junior DevOps interview.
+It also shows the latest 12 main-branch runs with duration history, filters, commit links, actors, relative timestamps, endpoint latency history, and a 10-second optional endpoint check loop. The page supports light and dark mode and refreshes GitHub data every 60 seconds.
 
-## Live Demo
+## `/api/pipeline`
 
-**Production:**  
-https://ci-cd-testing-deployment-pipeline.onrender.com
+`GET /api/pipeline` uses Node.js built-in `fetch` to read the GitHub REST API. It returns the latest 12 push workflow runs on `main`, jobs and steps for the newest run, and a commit comparison when `GIT_COMMIT` is available:
 
-Useful endpoints:
-
-- `/` — basic application response
-- `/healthz` — deployment health check
-- `/version` — application version and deployed Git commit
-
-Example:
-
-```text
-GET /healthz
-→ {"status":"ok"}
+```json
+{"runs": [], "jobs": [], "comparison": null, "error": null}
 ```
 
-## CI/CD Architecture
+GitHub data is cached for 60 seconds. If GitHub is unavailable or rate-limits the request, the endpoint returns HTTP 200 with cached data and an `error` message instead of returning a 500 response. The dashboard shows a visible stale-data warning.
+
+`GITHUB_TOKEN` is optional. When present, the server sends it as a bearer token to GitHub and can provide a higher GitHub API rate limit.
+
+## CI/CD architecture
 
 ```text
-Developer pushes to main
-        ↓
-GitHub Actions
-        ↓
-┌───────────────────────┐
-│ Test application      │
-│ - npm ci              │
-│ - ESLint              │
-│ - automated tests     │
-└───────────────────────┘
-        ↓
-┌───────────────────────┐
-│ Build + Push          │
-│ - Docker Buildx       │
-│ - GHCR authentication │
-│ - image: latest       │
-│ - image: sha-<commit> │
-└───────────────────────┘
-        ↓
-┌───────────────────────┐
-│ Deploy                │
-│ - Render webhook      │
-│ - production restart  │
-└───────────────────────┘
-        ↓
-GET /healthz
-        ↓
-Production verified
+push to main
+    ↓
+Test application
+    ↓
+Build and push Docker image
+    ↓
+Deploy to production
+    ↓
+Verify production health
 ```
 
-### Job dependency
+The workflow dependency is `test → build-and-push → deploy`. The final deployment step verifies `/healthz` with `curl --fail`.
 
-The GitHub Actions workflow intentionally enforces:
+### Commit SHA propagation
 
-```text
-test → build-and-push → deploy
+The existing workflow already passes the Git commit SHA to Docker with:
+
+```yaml
+build-args: |
+  GIT_COMMIT=${{ github.sha }}
 ```
 
-If the test job fails, the Docker build/push and deployment jobs do not run.
+The Dockerfile already declares `ARG GIT_COMMIT` in both stages and exports it as `ENV GIT_COMMIT` in the runtime image. The `/version` endpoint reads that runtime environment variable.
 
-Pull requests run the test job only. Docker publishing and production deployment happen only for pushes to `main`.
+**No workflow or Dockerfile change was required for the dashboard redesign.** If a deployed environment still reports `"commit": "dev"`, that indicates the running deployment predates the SHA propagation configuration or was built outside the existing GitHub Actions path; it is not caused by the dashboard.
 
-## Repository Structure
+## Repository structure
 
 ```text
 .
-├── .github/
-│   └── workflows/
-│       └── ci-cd.yml
+├── .github/workflows/ci-cd.yml
+├── public/
+│   ├── index.html
+│   ├── dashboard.css
+│   └── dashboard.js
 ├── src/
 │   ├── app.js
 │   └── server.js
-├── test/
-│   └── app.test.js
+├── test/app.test.js
 ├── Dockerfile
 ├── docker-compose.yml
 ├── package.json
@@ -98,167 +71,44 @@ Pull requests run the test job only. Docker publishing and production deployment
 └── README.md
 ```
 
-## Application
-
-The service uses Node.js and Express.
-
-Endpoints:
-
-| Endpoint | Purpose |
-|---|---|
-| `/` | Basic application response |
-| `/healthz` | Health check used after deployment |
-| `/version` | Shows application version and Git commit |
-
-Automated tests use Node's built-in test runner and Supertest.
-
-## Run Locally
-
-Install dependencies:
+## Run locally
 
 ```bash
 npm ci
-```
-
-Run lint:
-
-```bash
 npm run lint
-```
-
-Run tests:
-
-```bash
 npm test
-```
-
-Start the application:
-
-```bash
 npm start
 ```
 
-The application listens on port 3000 by default.
+Open `http://localhost:3000/`.
 
-### Docker Compose
+Optional GitHub authentication can be supplied through the `GITHUB_TOKEN` environment variable before starting the server.
+
+Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-Then verify:
+Then open `http://localhost:3000/`.
 
-```text
-http://localhost:3000/
-http://localhost:3000/healthz
-http://localhost:3000/version
-```
+## Application endpoints
 
-## Docker
+| Endpoint | Purpose |
+|---|---|
+| `/` | Status dashboard |
+| `/healthz` | Production health check |
+| `/version` | Version and deployed commit |
+| `/api/pipeline` | Cached GitHub Actions data |
 
-The project uses a multi-stage Dockerfile based on Node.js 24 Alpine.
+## Docker and deployment
 
-The image:
+The Dockerfile is a Node.js 24 Alpine multi-stage build and includes both `src/` and `public/`.
 
-- Installs production dependencies
-- Copies the application
-- Passes the Git commit into the image
-- Exposes port 3000
-- Runs `src/server.js`
-
-The CI pipeline publishes:
-
-```text
-ghcr.io/abhinavs1703/ci-cd-testing-deployment-pipeline:latest
-ghcr.io/abhinavs1703/ci-cd-testing-deployment-pipeline:sha-<commit>
-```
-
-The SHA tag provides an immutable reference to a specific source commit, while `latest` provides the current deployment image.
-
-## GitHub Actions
-
-Workflow file:
-
-```text
-.github/workflows/ci-cd.yml
-```
-
-The workflow uses:
-
-- `actions/checkout`
-- `actions/setup-node`
-- Docker Buildx
-- Docker login
-- Docker metadata
-- Docker build/push
-
-The workflow uses the built-in GitHub `GITHUB_TOKEN` for GHCR authentication. No registry password is hardcoded.
-
-The Render deployment hook is stored as the repository secret:
-
-```text
-RENDER_DEPLOY_HOOK_URL
-```
-
-## Failure Behavior
-
-The pipeline is designed to fail fast:
-
-- If `npm ci`, linting, or tests fail, the test job fails.
-- Because `build-and-push` needs `test`, the Docker image is not published after a failed test.
-- Because `deploy` needs `build-and-push`, production deployment does not run after a failed build/push.
-- Docker build/push failures stop the pipeline before deployment.
-- The deployment health check uses `curl --fail` and retries while the new production instance starts.
-- A non-200 health response causes the deployment job to fail.
-
-## Security Notes
+The CI pipeline publishes the `latest` image and an immutable `sha-<commit>` image to GHCR. Render is triggered through the existing `RENDER_DEPLOY_HOOK_URL` GitHub Actions secret.
 
 No credentials are stored in the repository.
 
-Secrets are provided through GitHub Actions secrets, and the workflow grants only the permissions needed by each job:
-
-- repository contents: read
-- packages: write for the image publishing job
-
-The deployment endpoint is protected by the secret Render deploy hook URL.
-
 ## Verification
 
-The completed pipeline has been verified with successful GitHub Actions runs showing:
-
-```text
-Test application ✓
-        ↓
-Build and push Docker image ✓
-        ↓
-Deploy to production ✓
-```
-
-Production was also verified through:
-
-```text
-/healthz  → HTTP 200
-/         → application response
-/version  → application version + Git commit
-```
-
-## Interview Summary
-
-A simple way to explain the project:
-
-> "I built a GitHub Actions CI/CD pipeline for a Node.js application. Every push to main installs dependencies, runs linting and automated tests, and only if those pass does the pipeline build a Docker image and publish it to GHCR. The pipeline then triggers a Render deployment and verifies the production health endpoint. I used explicit job dependencies so a failed test or build cannot accidentally reach production."
-
-Key DevOps concepts demonstrated:
-
-- CI/CD
-- GitHub Actions
-- automated testing
-- linting
-- Docker multi-stage builds
-- container registry publishing
-- secrets management
-- deployment webhooks
-- health checks
-- pipeline job dependencies
-- fail-fast behavior
-- immutable commit-based image tags
+The project demonstrates CI/CD job dependencies, automated tests and linting, Docker multi-stage builds, GHCR publishing, Render deployment, production health verification, commit traceability, live endpoint latency checks, GitHub Actions history, cached API failure handling, and a responsive status UI.

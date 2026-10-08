@@ -1,119 +1,60 @@
-const fmtTime = (value) => value ? new Date(value).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}) : "—";
-const shortSha = (value) => value ? value.slice(0, 7) : "—";
-
-function setStatus(el, text, type) {
-  el.textContent = text;
-  el.classList.remove("ok-text","fail-text");
-  if (type === "ok") el.classList.add("ok-text");
-  if (type === "fail") el.classList.add("fail-text");
+const JOBS = ["Test application", "Build and push Docker image", "Deploy to production"];
+const ENDPOINTS = ["/", "/healthz", "/version"];
+const state = { runs: [], jobs: [], testHistory: [], pipeline: null, version: null, selectedJob: null, filter: "all", service: { "/": [], "/healthz": [], "/version": [] }, refreshing: false, auto: false, autoTimer: null, refreshedAt: 0, nextAt: 0, startedAt: Date.now(), checking: false, booted: false };
+const $ = (id) => document.getElementById(id);
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+function addText(parent, tag, value, cls) { const n = document.createElement(tag); if (cls) n.className = cls; n.textContent = value; parent.appendChild(n); return n; }
+function fmt(ms) { if (!Number.isFinite(ms) || ms < 0) return "—"; if (ms < 1000) return `${Math.round(ms)}ms`; const s = Math.round(ms / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`; }
+function elapsed(start, end) { if (!start) return 0; const a = new Date(start).getTime(); const b = new Date(end || Date.now()).getTime(); return Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, b - a) : 0; }
+function short(value) { return value && value !== "dev" && value !== "dev-build" ? value.slice(0, 12) : "—"; }
+function ago(value) { if (!value) return "—"; const s = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000)); if (s < 60) return `${s}s ago`; const m = Math.round(s / 60); if (m < 60) return `${m}m ago`; const h = Math.round(m / 60); return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`; }
+function stamp(value) { if (!value) return "—"; const d = new Date(value); return Number.isNaN(d.getTime()) ? "—" : d.toISOString(); }
+function kind(item) { if (!item) return "unknown"; if (item.conclusion === "success") return "passed"; if (["queued", "in_progress", "waiting"].includes(item.status)) return "running"; if (item.conclusion) return "failed"; return "unknown"; }
+function label(item) { const k = kind(item); return k === "passed" ? "PASSED" : k === "failed" ? "FAILED" : k === "running" ? "RUNNING" : "NO DATA"; }
+function glyph(k) { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 16 16"); s.classList.add("glyph", k); s.setAttribute("aria-hidden", "true"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("fill","none"); p.setAttribute("stroke","currentColor"); p.setAttribute("stroke-width","1.6"); p.setAttribute("stroke-linecap","round"); p.setAttribute("stroke-linejoin","round"); p.setAttribute("d", k === "passed" ? "M3 8.2 6.2 11 13 4.5" : k === "failed" ? "m4 4 8 8m0-8-8 8" : k === "running" ? "M8 3v5l3 2M8 14A6 6 0 1 1 8 2a6 6 0 0 1 0 12Z" : "M3 8h10"); s.appendChild(p); return s; }
+function setClassText(node, value, k) { clear(node); node.className = k || ""; node.textContent = value; }
+async function json(path) { const r = await fetch(path, { cache: "no-store" }); const b = await r.json(); if (!r.ok) throw new Error(`${path} HTTP ${r.status}`); return b; }
+function bootLine(message, ok) { const row = document.createElement("div"); row.textContent = message; if (ok) row.className = "ok"; $("bootLog").appendChild(row); }
+function bootTyped(message, ok) { return new Promise((resolve) => { if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { bootLine(message, ok); resolve(); return; } const row = document.createElement("div"); if (ok) row.className = "ok"; $("bootLog").appendChild(row); let i = 0; const tick = () => { row.textContent = message.slice(0, i); i += 1; if (i <= message.length) window.setTimeout(tick, 12); else resolve(); }; tick(); }); }
+function setupHeader() { $("env").textContent = location.hostname.endsWith(".onrender.com") ? "PRODUCTION" : "LOCAL"; }
+function clock() { $("clock").textContent = new Date().toLocaleTimeString("en-GB", { hour12: false }); const up = Date.now() - state.startedAt; $("uptime").textContent = `UP ${new Date(up).toISOString().slice(11,19)}`; if (state.nextAt) $("nextRefresh").textContent = `${Math.max(0, Math.ceil((state.nextAt - Date.now()) / 1000))}s`; }
+function statusTitle() { const latest = state.runs[0], health = state.service["/healthz"][0]; if (!latest || !health) return ["NO DATA", "WAITING FOR TELEMETRY", "unknown"]; if (kind(latest) === "failed" || !health.ok) return ["FAILURE", `RUN #${latest.number} / SERVICE ${health.status || "DOWN"}`, "failed"]; if (kind(latest) === "running") return ["DEGRADED", `RUN #${latest.number} / PIPELINE ACTIVE`, "running"]; return ["ALL SYSTEMS NOMINAL", `RUN #${latest.number} / HEALTH ${health.latency}ms`, "passed"]; }
+function renderCore() {
+  const [title, meta, k] = statusTitle();
+  setClassText($("verdict"), title, `status-${k}`);
+  $("verdictMeta").textContent = meta;
+  setClassText($("heroChip"), k === "passed" ? "HEALTHY" : k === "failed" ? "ACTION REQUIRED" : k === "running" ? "IN PROGRESS" : "WAITING", `status-${k} status-chip`);
+  const latest = state.runs[0];
+  $("heroRun").textContent = latest ? `#${latest.number}` : "—";
+  const done = state.testHistory.filter((x) => x.status === "completed");
+  const passed = done.filter((x) => x.conclusion === "success").length;
+  $("heroPassRate").textContent = done.length ? `${Math.round(passed / done.length * 100)}%` : "—";
+  const health = state.service["/healthz"][0];
+  $("heroService").textContent = health ? (health.ok ? `OK · ${health.latency}ms` : "DOWN") : "—";
+  $("heroVersion").textContent = state.version?.version ? `v${state.version.version}` : "—";
+  const ring = $("runRing"); clear(ring);
+  state.runs.slice(0,12).forEach((run,i) => {
+    const seg=document.createElement("button"); seg.type="button";
+    seg.className=`run-segment ${kind(run)}${i===0?" newest":""}`;
+    seg.title=`Run #${run.number} · ${label(run)} · ${fmt(elapsed(run.run_started_at||run.created_at,run.updated_at))}`;
+    seg.setAttribute("aria-label",seg.title);
+    seg.addEventListener("click",()=>window.open(run.html_url,"_blank","noopener"));
+    ring.appendChild(seg);
+  });
 }
-
-function stage(stage, state, label) {
-  const el = document.querySelector('[data-stage="' + stage + '"]');
-  if (!el) return;
-  el.classList.remove("ok","fail","running");
-  el.classList.add(state);
-  el.querySelector(".stage-status").textContent = label;
-}
-
-async function refreshDashboard() {
-  const refresh = document.getElementById("refreshBtn");
-  refresh.disabled = true;
-  refresh.textContent = "Refreshing…";
-
-  try {
-    const [version, pipeline] = await Promise.all([
-      fetch("/version", {cache:"no-store"}).then(r => r.ok ? r.json() : Promise.reject(new Error("version"))),
-      fetch("/api/pipeline", {cache:"no-store"}).then(r => r.json())
-    ]);
-
-    setStatus(document.getElementById("deployStatus"), "Healthy", "ok");
-    document.getElementById("deployDetail").textContent = "Production /healthz returned OK";
-    document.getElementById("healthBadge").textContent = "Healthy";
-    document.getElementById("healthBadge").className = "status-badge";
-    document.getElementById("healthState").textContent = "200 OK ↗";
-    document.getElementById("healthState").className = "ok-text";
-    document.getElementById("rootState").textContent = "Live ↗";
-    document.getElementById("rootState").className = "ok-text";
-    document.getElementById("versionState").textContent = "Live ↗";
-    document.getElementById("versionState").className = "ok-text";
-
-    document.getElementById("appVersion").textContent = "v" + version.version;
-    document.getElementById("commitSha").textContent = "Commit " + shortSha(version.commit);
-
-    renderPipeline(pipeline);
-  } catch (error) {
-    setStatus(document.getElementById("deployStatus"), "Attention", "fail");
-    document.getElementById("deployDetail").textContent = "One or more status checks failed";
-    document.getElementById("healthBadge").textContent = "Unavailable";
-    document.getElementById("healthBadge").className = "status-badge";
-    document.getElementById("healthState").textContent = "Check failed";
-    document.getElementById("healthState").className = "fail-text";
-  } finally {
-    document.getElementById("updatedAt").textContent = "Last refreshed " + new Date().toLocaleTimeString();
-    refresh.disabled = false;
-    refresh.textContent = "Refresh";
-  }
-}
-
-function renderPipeline(data) {
-  const run = data.run;
-  if (!run) {
-    document.getElementById("pipelineStatus").textContent = "Unavailable";
-    document.getElementById("pipelineTime").textContent = "GitHub API unavailable";
-    document.getElementById("runBadge").textContent = "Unavailable";
-    document.getElementById("activity").innerHTML = '<div class="activity-row"><div class="activity-dot"></div><div class="activity-copy"><strong>Pipeline data unavailable</strong><span>Production health is still checked independently.</span></div></div>';
-    return;
-  }
-
-  const conclusion = run.conclusion;
-  const status = run.status;
-  const overall = conclusion === "success" ? "Passed" : status === "in_progress" || status === "queued" ? "Running" : "Failed";
-  const overallType = conclusion === "success" ? "ok" : overall === "Running" ? "run" : "fail";
-
-  document.getElementById("pipelineStatus").textContent = overall;
-  document.getElementById("pipelineStatus").className = overall === "Passed" ? "ok-text" : overall === "Failed" ? "fail-text" : "";
-  document.getElementById("pipelineTime").textContent = fmtTime(run.updated_at || run.created_at);
-  document.getElementById("runBadge").textContent = overall;
-  document.getElementById("runBadge").className = "status-badge " + (overallType === "ok" ? "" : overallType === "fail" ? "fail-text" : "");
-
-  document.getElementById("runTitle").textContent = run.display_title || "Pipeline activity";
-  const runLink = document.getElementById("runLink");
-  runLink.href = run.html_url || "https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/actions";
-
-  const jobs = data.jobs || [];
-  const findJob = (name) => jobs.find(j => j.name.toLowerCase().includes(name));
-  const test = findJob("test application");
-  const build = findJob("build and push");
-  const deploy = findJob("deploy to production");
-
-  const stateFor = (job) => {
-    if (!job) return ["running","pending"];
-    if (job.conclusion === "success") return ["ok","Passed"];
-    if (job.conclusion === "failure" || job.conclusion === "cancelled") return ["fail","Failed"];
-    return ["running","Running"];
-  };
-
-  const [testState,testLabel] = stateFor(test);
-  const [buildState,buildLabel] = stateFor(build);
-  const [deployState,deployLabel] = stateFor(deploy);
-  stage("test",testState,testLabel);
-  stage("build",buildState,buildLabel);
-  stage("deploy",deployState,deployLabel);
-  stage("verify",deployState,deployLabel === "Passed" ? "Verified" : deployLabel);
-
-  const activity = jobs.length ? jobs.map(job => {
-    const [kind,label] = stateFor(job);
-    return '<div class="activity-row"><div class="activity-dot ' + (kind === "ok" ? "ok" : kind === "fail" ? "fail" : "run") + '"></div><div class="activity-copy"><strong>' + escapeHtml(job.name) + '</strong><span>' + escapeHtml(label) + '</span></div><span class="activity-time">' + fmtTime(job.completed_at || job.started_at) + '</span></div>';
-  }).join("") : '<div class="activity-row"><div class="activity-dot"></div><div class="activity-copy"><strong>No job details returned</strong><span>Open the Actions run for the full execution graph.</span></div></div>';
-
-  document.getElementById("activity").innerHTML = activity;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[char]));
-}
-
-document.getElementById("refreshBtn").addEventListener("click", refreshDashboard);
-refreshDashboard();
-setInterval(refreshDashboard, 30000);
+function animateMetric(node, target, suffix) { const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; if (reduced || !Number.isFinite(target)) { node.textContent = `${target}% ${suffix}`; return; } const start = performance.now(); const step = (now) => { const progress = Math.min(1, (now - start) / 650); node.textContent = `${Math.round(target * progress)}% ${suffix}`; if (progress < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+function renderTest() { const latest = state.runs[0], job = state.jobs.find((j) => j.name === "Test application"), history = state.testHistory, k=kind(job); setClassText($("testState"), k==="passed"?"TESTS PASSED":k==="failed"?"TESTS FAILED":k==="running"?"TESTS RUNNING":"NO DATA", `status-${k}`); clear($("testGlyph")); $("testGlyph").appendChild(glyph(k)); $("testTrace").textContent = job ? "SOURCE: GITHUB ACTIONS / TEST APPLICATION" : "NO TEST JOB DATA"; const runLink=$("testRun"), commit=$("testCommit"); clear(runLink); clear(commit); if (latest?.html_url) { runLink.href=latest.html_url; runLink.textContent=`#${latest.number}`; } else runLink.textContent="—"; if (latest?.head_sha) { commit.href=`https://github.com/abhinavs1703/ci-cd-testing-deployment-pipeline/commit/${latest.head_sha}`; commit.textContent=latest.head_sha; } else commit.textContent="—"; $("testTime").textContent=latest?.run_started_at ? stamp(latest.run_started_at) : "—"; const steps=$("testSteps"); clear(steps); const targets=(job?.steps||[]).filter((s)=>/lint|test/i.test(s.name||"")); if(!targets.length) addText(steps,"div","NO LINT / TEST STEP DATA","empty"); targets.forEach((step)=>{ const row=document.createElement("div"); row.className="test-step"; row.appendChild(glyph(kind(step))); addText(row,"span",step.name||"—"); addText(row,"small",`${label(step)} · ${fmt(elapsed(step.started_at,step.completed_at))}`); steps.appendChild(row); }); const done=history.filter((x)=>x.status==="completed"), passed=done.filter((x)=>x.conclusion==="success").length; if (done.length) animateMetric($("testRate"), Math.round(passed / done.length * 100), `${passed}/${done.length}`); else $("testRate").textContent = "NO DATA"; const strip=$("testHistory"); clear(strip); history.forEach((x)=>{ const t=document.createElement("button"); t.type="button"; t.className=`test-tick ${kind(x)}`; t.title=`Run #${x.run_number} · ${label(x)}`; t.setAttribute("aria-label",t.title); strip.appendChild(t); }); }
+function renderFlow() { const box=$("flow"); clear(box); const jobs=[...state.jobs].sort((a,b)=>JOBS.indexOf(a.name)-JOBS.indexOf(b.name)); if(!jobs.length){addText(box,"div","NO JOB DATA","empty");return} if(!state.selectedJob || !jobs.some(j=>j.id===state.selectedJob)) state.selectedJob=jobs[0].id; jobs.forEach((job)=>{const b=document.createElement("button");b.type="button";b.className="flow-node";b.setAttribute("aria-selected",String(job.id===state.selectedJob));b.addEventListener("click",()=>{state.selectedJob=job.id;renderFlow();renderTelemetry()});b.appendChild(glyph(kind(job)));addText(b,"span",job.name||"NO DATA","flow-name");addText(b,"span",fmt(elapsed(job.started_at,job.completed_at)),"flow-duration");box.appendChild(b)}); }
+function renderTelemetry() { const box=$("telemetry");clear(box);const job=state.jobs.find(j=>j.id===state.selectedJob);$("selectedJob").textContent=job?.name||"NO JOB SELECTED";if(!job){addText(box,"div","NO JOB DATA","empty");return}if(!job.steps?.length){addText(box,"div","NO STEP DATA","empty");return}const start=new Date(job.started_at).getTime(),end=new Date(job.completed_at||Date.now()).getTime(),total=Math.max(1,end-start),ds=job.steps.map(s=>elapsed(s.started_at,s.completed_at)),slow=Math.max(...ds,0);job.steps.forEach((step,i)=>{const row=document.createElement("div");row.className="tele-row";const name=document.createElement("div");name.className="tele-name";name.appendChild(glyph(kind(step)));addText(name,"span",step.name||"NO DATA");row.appendChild(name);const track=document.createElement("div");track.className="tele-track";const bar=document.createElement("div");bar.className=`tele-bar ${kind(step)}${ds[i]===slow&&slow>0?" slowest":""}`;const ss=step.started_at?new Date(step.started_at).getTime():start;bar.style.left=`${Math.max(0,Math.min(96,(ss-start)/total*100))}%`;bar.style.width=`${Math.max(1,Math.min(100,ds[i]/total*100))}%`;track.appendChild(bar);row.appendChild(track);addText(row,"span",fmt(ds[i]));box.appendChild(row)}); }
+function spark(history){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.classList.add("spark");svg.setAttribute("viewBox","0 0 180 28");if(!history.length)return svg;const vals=history.map(x=>x.latency).reverse(),min=Math.min(...vals),range=Math.max(1,Math.max(...vals)-min),pts=vals.map((v,i)=>`${vals.length===1?90:i/(vals.length-1)*178+1},${25-(v-min)/range*20}`).join(" ");const p=document.createElementNS("http://www.w3.org/2000/svg","polyline");p.setAttribute("points",pts);svg.appendChild(p);return svg}
+async function check(path){const t=performance.now();try{const r=await fetch(path,{cache:"no-store"});return{status:r.status,ok:r.ok,latency:Math.round(performance.now()-t),at:new Date().toISOString()}}catch(_e){return{status:null,ok:false,latency:Math.round(performance.now()-t),at:new Date().toISOString()}}}
+async function runChecks(){if(state.checking)return;state.checking=true;$("checks").textContent="CHECKING";$("checks").disabled=true;try{const results=await Promise.all(ENDPOINTS.map(async p=>({path:p,...await check(p)})));results.forEach(r=>{state.service[r.path]=[r,...state.service[r.path]].slice(0,30)});renderServices();renderCore()}finally{state.checking=false;$("checks").textContent="RUN CHECKS";$("checks").disabled=false}}
+function renderServices(){const box=$("service-rows");clear(box);let newest=0;ENDPOINTS.forEach(path=>{const h=state.service[path],r=h[0];if(r)newest=Math.max(newest,new Date(r.at).getTime());const row=document.createElement("div");row.className="service-row";addText(row,"span",path,"path");addText(row,"span","GET");addText(row,"span",r?(r.ok?`HTTP ${r.status}`:`HTTP ${r.status||"ERR"}`):"—",r?(r.ok?"good":"bad"):"unknown");addText(row,"span",r?`${r.latency}ms`:"—");row.appendChild(spark(h));const vals=h.map(x=>x.latency);addText(row,"span",vals.length?`${Math.min(...vals)} / ${Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)} / ${Math.max(...vals)}ms`:"—");box.appendChild(row)});$("serviceAge").textContent=newest?`LAST ${ago(new Date(newest).toISOString())}`:"NO CHECKS"}
+function renderSync(){const live=state.version?.commit,main=state.runs[0],node=$("sync");let text="UNKNOWN",k="unknown";if(live&&live!=="dev"&&live!=="dev-build"&&main?.head_sha){if(live===main.head_sha){text="IN SYNC";k="good"}else if(state.pipeline?.comparison?.status==="behind"&&Number.isFinite(state.pipeline.comparison.behind_by)){text=`BEHIND ${state.pipeline.comparison.behind_by}`;k="bad"}}node.textContent=text;node.parentElement.className=`sync-readout ${k}`; $("version").textContent=state.version?.version?`v${state.version.version}`:"—";$("liveCommit").textContent=short(live);$("mainCommit").textContent=short(main?.head_sha);$("mainRun").textContent=main?`#${main.number}`:"—"}
+function renderLog(){const box=$("runLog");clear(box);const runs=state.runs.filter(r=>state.filter==="all"||(state.filter==="passed"?r.conclusion==="success":r.status==="completed"&&r.conclusion!=="success"));$("countAll").textContent=state.runs.length;$("countPassed").textContent=state.runs.filter(r=>r.conclusion==="success").length;$("countFailed").textContent=state.runs.filter(r=>r.status==="completed"&&r.conclusion!=="success").length;if(!runs.length){addText(box,"div","NO RUN DATA","empty");return}runs.forEach(r=>{const row=document.createElement("div");row.className="log-row";row.tabIndex=0;row.setAttribute("role","link");row.addEventListener("click",()=>window.open(r.html_url,"_blank","noopener"));row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();window.open(r.html_url,"_blank","noopener")}});addText(row,"span",`#${r.number}`);addText(row,"span",short(r.head_sha));addText(row,"span",r.actor||"NO DATA","log-actor");addText(row,"span",label(r),`result ${kind(r)}`);addText(row,"span",fmt(elapsed(r.run_started_at||r.created_at,r.updated_at)));addText(row,"span",ago(r.run_started_at||r.created_at),"log-time");box.appendChild(row)})}
+function renderAll(){renderCore();renderTest();renderFlow();renderTelemetry();renderServices();renderSync();renderLog()}
+function banner(error){const b=$("banner");b.hidden=!error;b.textContent=error?"GITHUB LINK WARNING: "+error:"";}
+async function refresh(){if(state.refreshing)return;state.refreshing=true;$("refresh").disabled=true;$("refresh").textContent="LINKING";try{const booting=!state.booted;if(booting)bootLine("PIPELINE LINK...");const results=await Promise.allSettled([json("/version"),json("/api/pipeline")]);if(results[0].status==="fulfilled"){state.version=results[0].value;if(booting)bootLine("VERSION LINK ........ OK",true)}else if(booting)bootLine("VERSION LINK ........ NO DATA");if(results[1].status==="fulfilled"){state.pipeline=results[1].value;state.runs=Array.isArray(state.pipeline.runs)?state.pipeline.runs:[];state.jobs=Array.isArray(state.pipeline.jobs)?state.pipeline.jobs:[];state.testHistory=Array.isArray(state.pipeline.test_history)?state.pipeline.test_history:[];banner(state.pipeline.error);if(booting)bootLine("GITHUB ACTIONS ...... OK",true)}else{banner(results[1].reason?.message||"UNAVAILABLE");if(booting)bootLine("GITHUB ACTIONS ...... FAIL")}await runChecks();if(booting){bootLine("SERVICE LINK ........ OK",true);state.booted=true}state.refreshedAt=Date.now();state.nextAt=state.refreshedAt+60000;$("footerRefresh").textContent=ago(new Date(state.refreshedAt).toISOString());renderAll()}catch(e){banner(e instanceof Error?e.message:"REFRESH FAILED")}finally{$("refresh").disabled=false;$("refresh").textContent="REFRESH";state.refreshing=false}}
+function setAuto(){state.auto=!state.auto;const b=$("auto");b.setAttribute("aria-pressed",String(state.auto));b.textContent=`AUTO: ${state.auto?"ON":"OFF"}`;if(state.autoTimer)clearInterval(state.autoTimer);state.autoTimer=state.auto?setInterval(runChecks,10000):null}
+setupHeader();clock();window.setInterval(clock,1000);$("refresh").addEventListener("click",refresh);$("checks").addEventListener("click",runChecks);$("auto").addEventListener("click",setAuto);document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{state.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));renderLog()}));window.setInterval(()=>{if(state.nextAt&&Date.now()>=state.nextAt)refresh()},1000);
+(async()=>{await bootTyped("INITIALIZING PIPELINE LINK...",false);await refresh()})();
